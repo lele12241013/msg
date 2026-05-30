@@ -20,8 +20,8 @@ const defaultPopupSettings = {
   opacity: 92,
 };
 const defaultRemoteConfig = {
-  enabled: false,
-  rawUrl: '',
+  enabled: true,
+  rawUrl: 'https://raw.githubusercontent.com/lele12241013/msg/main/relay/popup-command.json',
   deviceKey: 'notebook-1',
   pollIntervalMs: 15000,
 };
