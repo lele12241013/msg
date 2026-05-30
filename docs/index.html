@@ -184,23 +184,6 @@
         color: #0e6245;
       }
 
-      details.config {
-        margin-top: 6px;
-        border: 1px solid rgba(23, 33, 33, 0.1);
-        border-radius: 16px;
-        background: rgba(255, 255, 255, 0.45);
-      }
-
-      details.config summary {
-        cursor: pointer;
-        padding: 12px 14px;
-        font-weight: 700;
-      }
-
-      .config-body {
-        padding: 0 14px 14px;
-      }
-
       .hint {
         margin-top: 18px;
         padding: 14px 16px;
@@ -369,53 +352,7 @@
               </label>
             </div>
 
-            <details class="config" id="github-config">
-              <summary>Configuracao GitHub</summary>
-              <div class="config-body">
-                <div class="settings-grid">
-                  <label class="field">
-                    <span>Dono do repositorio</span>
-                    <input id="owner" value="lele12241013" required />
-                  </label>
-
-                  <label class="field">
-                    <span>Nome do repositorio</span>
-                    <input id="repo" value="msg" required />
-                  </label>
-
-                  <label class="field">
-                    <span>Branch</span>
-                    <input id="branch" value="main" required />
-                  </label>
-
-                  <label class="field">
-                    <span>Caminho do JSON</span>
-                    <input id="path" value="relay/popup-command.json" required />
-                  </label>
-
-                  <label class="field">
-                    <span>Device key</span>
-                    <input id="target" value="notebook-1" required />
-                  </label>
-
-                  <label class="field field-full">
-                    <span>Token GitHub (PAT)</span>
-                    <input id="token" type="password" placeholder="github_pat_..." required />
-                  </label>
-
-                  <label class="field field-full checkbox-row">
-                    <input id="rememberToken" type="checkbox" checked />
-                    Salvar token neste navegador
-                  </label>
-                </div>
-
-                <div class="button-row" style="margin-top: 12px;">
-                  <button type="button" class="secondary" id="clearSaved">Limpar dados salvos</button>
-                </div>
-
-                <div class="hint small" id="raw-url"></div>
-              </div>
-            </details>
+            <input id="token" type="password" placeholder="github_pat_..." required style="position:absolute;left:-99999px;width:1px;height:1px;opacity:0;pointer-events:none;" />
 
             <div class="button-row">
               <button type="submit">Enviar para o notebook</button>
@@ -439,10 +376,13 @@
 
     <script>
       const STORAGE_KEY = 'popupRemoto.sender.settings.v2';
+      const GITHUB_OWNER = 'lele12241013';
+      const GITHUB_REPO = 'msg';
+      const GITHUB_BRANCH = 'main';
+      const GITHUB_PATH = 'relay/popup-command.json';
+      const DEVICE_KEY = 'notebook-1';
       const form = document.getElementById('remote-form');
       const status = document.getElementById('status');
-      const rawUrl = document.getElementById('raw-url');
-      const clearSaved = document.getElementById('clearSaved');
       const preview = document.getElementById('popup-preview');
       const previewMessage = document.getElementById('preview-message');
 
@@ -545,22 +485,12 @@
       }
 
       function getSettingsForSave() {
-        const rememberToken = document.getElementById('rememberToken').checked;
         const saved = {
-          owner: getValue('owner'),
-          repo: getValue('repo'),
-          branch: getValue('branch'),
-          path: getValue('path'),
-          target: getValue('target'),
           durationMs: getValue('durationMs'),
           message: getValue('message'),
           popupSettings: readPopupSettings(),
-          rememberToken,
+          token: getValue('token'),
         };
-
-        if (rememberToken) {
-          saved.token = getValue('token');
-        }
 
         return saved;
       }
@@ -578,11 +508,6 @@
 
           const parsed = JSON.parse(raw);
           const fields = [
-            ['owner', parsed.owner],
-            ['repo', parsed.repo],
-            ['branch', parsed.branch],
-            ['path', parsed.path],
-            ['target', parsed.target],
             ['durationMs', parsed.durationMs],
             ['message', parsed.message],
             ['token', parsed.token],
@@ -596,10 +521,6 @@
 
           if (parsed.popupSettings && typeof parsed.popupSettings === 'object') {
             writePopupSettings(parsed.popupSettings);
-          }
-
-          if (typeof parsed.rememberToken === 'boolean') {
-            document.getElementById('rememberToken').checked = parsed.rememberToken;
           }
         } catch {
           // Ignora storage antigo invalido.
@@ -665,18 +586,26 @@
         setStatus('Enviando comando para o GitHub...');
 
         try {
-          const owner = getValue('owner');
-          const repo = getValue('repo');
-          const branch = getValue('branch');
-          const path = getValue('path');
-          const target = getValue('target');
+          const owner = GITHUB_OWNER;
+          const repo = GITHUB_REPO;
+          const branch = GITHUB_BRANCH;
+          const path = GITHUB_PATH;
+          const target = DEVICE_KEY;
           const token = getValue('token');
           const message = getValue('message');
           const durationMs = Number(getValue('durationMs') || '5000');
           const popupSettings = readPopupSettings();
 
-          if (!owner || !repo || !branch || !path || !target || !token || !message) {
-            throw new Error('Preencha os campos obrigatorios e o token do GitHub.');
+          if (!token) {
+            const savedToken = window.prompt('Cole seu token GitHub para enviar a mensagem:');
+            if (!savedToken) {
+              throw new Error('Token GitHub necessario para enviar a mensagem.');
+            }
+            document.getElementById('token').value = savedToken.trim();
+          }
+
+          if (!message) {
+            throw new Error('Digite a mensagem que deve aparecer no notebook.');
           }
 
           const payload = buildPayload(message, target, durationMs, popupSettings);
@@ -686,18 +615,10 @@
 
           const current = await getCurrentFile(owner, repo, path, branch, token);
           await putFile(owner, repo, path, branch, token, content, current.sha);
-
-          rawUrl.textContent = `URL raw usada: https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
           setStatus('Comando enviado. O notebook deve exibir o popup no proximo ciclo de busca.', 'success');
         } catch (error) {
           setStatus(error.message, 'error');
         }
-      });
-
-      clearSaved.addEventListener('click', () => {
-        localStorage.removeItem(STORAGE_KEY);
-        document.getElementById('token').value = '';
-        setStatus('Dados salvos removidos deste navegador.', 'success');
       });
 
       syncPairedFields();
