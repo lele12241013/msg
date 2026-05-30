@@ -2,7 +2,7 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const path = require('path');
-const { exec, execFile } = require('child_process');
+const { exec, execFile, execFileSync } = require('child_process');
 const express = require('express');
 
 const PORT = Number(process.env.PORT || 3471);
@@ -22,6 +22,9 @@ const defaultPopupSettings = {
 const defaultRemoteConfig = {
   enabled: true,
   rawUrl: 'https://raw.githubusercontent.com/lele12241013/msg/main/relay/popup-command.json',
+  repoUrl: 'https://github.com/lele12241013/msg.git',
+  branch: 'main',
+  relayPath: 'relay/popup-command.json',
   deviceKey: 'notebook-1',
   pollIntervalMs: 15000,
 };
@@ -31,6 +34,7 @@ const settingsDirectory = process.pkg
 const settingsPath = path.join(settingsDirectory, 'settings.json');
 const remoteConfigPath = path.join(settingsDirectory, 'remote-config.json');
 const remoteStatePath = path.join(settingsDirectory, 'remote-state.json');
+const relayRepoDirectory = path.join(settingsDirectory, 'relay-repo');
 
 let popupInFlight = false;
 let popupSettings = loadPopupSettings();
@@ -68,14 +72,18 @@ function ensureSettingsDirectory() {
   fs.mkdirSync(settingsDirectory, { recursive: true });
 }
 
+function readJsonFileSafely(filePath) {
+  const rawContent = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
+  return JSON.parse(rawContent);
+}
+
 function loadPopupSettings() {
   try {
     if (!fs.existsSync(settingsPath)) {
       return { ...defaultPopupSettings };
     }
 
-    const rawContent = fs.readFileSync(settingsPath, 'utf8');
-    return normalizePopupSettings(JSON.parse(rawContent));
+    return normalizePopupSettings(readJsonFileSafely(settingsPath));
   } catch {
     return { ...defaultPopupSettings };
   }
@@ -92,6 +100,15 @@ function normalizeRemoteConfig(input = {}) {
   return {
     enabled: input.enabled === true || input.enabled === 'true',
     rawUrl: typeof input.rawUrl === 'string' ? input.rawUrl.trim() : '',
+    repoUrl: typeof input.repoUrl === 'string' && input.repoUrl.trim()
+      ? input.repoUrl.trim()
+      : defaultRemoteConfig.repoUrl,
+    branch: typeof input.branch === 'string' && input.branch.trim()
+      ? input.branch.trim()
+      : defaultRemoteConfig.branch,
+    relayPath: typeof input.relayPath === 'string' && input.relayPath.trim()
+      ? input.relayPath.trim()
+      : defaultRemoteConfig.relayPath,
     deviceKey: typeof input.deviceKey === 'string' && input.deviceKey.trim()
       ? input.deviceKey.trim()
       : defaultRemoteConfig.deviceKey,
@@ -105,7 +122,7 @@ function loadRemoteConfig() {
       return { ...defaultRemoteConfig };
     }
 
-    return normalizeRemoteConfig(JSON.parse(fs.readFileSync(remoteConfigPath, 'utf8')));
+    return normalizeRemoteConfig(readJsonFileSafely(remoteConfigPath));
   } catch {
     return { ...defaultRemoteConfig };
   }
@@ -124,7 +141,7 @@ function loadRemoteState() {
       return { lastCommandId: '' };
     }
 
-    const parsed = JSON.parse(fs.readFileSync(remoteStatePath, 'utf8'));
+    const parsed = readJsonFileSafely(remoteStatePath);
     return {
       lastCommandId: typeof parsed.lastCommandId === 'string' ? parsed.lastCommandId : '',
     };
@@ -192,6 +209,42 @@ function requestJson(url) {
   });
 }
 
+function runGitCommand(args) {
+  return execFileSync('git', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true,
+  });
+}
+
+function ensureRelayRepoUpToDate() {
+  const gitDirectory = path.join(relayRepoDirectory, '.git');
+
+  if (!fs.existsSync(gitDirectory)) {
+    fs.rmSync(relayRepoDirectory, { recursive: true, force: true });
+    runGitCommand(['clone', '--depth', '1', '--branch', remoteConfig.branch, remoteConfig.repoUrl, relayRepoDirectory]);
+    return;
+  }
+
+  runGitCommand(['-C', relayRepoDirectory, 'fetch', 'origin', remoteConfig.branch, '--depth', '1']);
+  runGitCommand(['-C', relayRepoDirectory, 'checkout', '-B', remoteConfig.branch, `origin/${remoteConfig.branch}`]);
+  runGitCommand(['-C', relayRepoDirectory, 'reset', '--hard', `origin/${remoteConfig.branch}`]);
+}
+
+function readRelayPayloadFromGit() {
+  ensureSettingsDirectory();
+  ensureRelayRepoUpToDate();
+
+  const relayPathSegments = remoteConfig.relayPath.split('/').filter(Boolean);
+  const relayFilePath = path.join(relayRepoDirectory, ...relayPathSegments);
+
+  if (!fs.existsSync(relayFilePath)) {
+    throw new Error(`Arquivo relay nao encontrado no repositorio: ${remoteConfig.relayPath}`);
+  }
+
+  return readJsonFileSafely(relayFilePath);
+}
+
 async function pollRemoteCommand() {
   if (!remoteConfig.enabled || !remoteConfig.rawUrl || remotePollInFlight) {
     return;
@@ -200,8 +253,9 @@ async function pollRemoteCommand() {
   remotePollInFlight = true;
 
   try {
-    const separator = remoteConfig.rawUrl.includes('?') ? '&' : '?';
-    const payload = await requestJson(`${remoteConfig.rawUrl}${separator}t=${Date.now()}`);
+    const payload = remoteConfig.repoUrl
+      ? readRelayPayloadFromGit()
+      : await requestJson(`${remoteConfig.rawUrl}${remoteConfig.rawUrl.includes('?') ? '&' : '?'}t=${Date.now()}`);
     const commandId = typeof payload.id === 'string' ? payload.id.trim() : '';
     const target = typeof payload.target === 'string' ? payload.target.trim() : '';
     const message = typeof payload.message === 'string' ? payload.message.trim() : '';

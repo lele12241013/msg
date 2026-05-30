@@ -42,8 +42,9 @@ $remoteState = [ordered]@{
   lastCommandId = ''
 }
 
-$remoteConfig | ConvertTo-Json | Set-Content -Path $remoteConfigPath -Encoding UTF8
-$remoteState | ConvertTo-Json | Set-Content -Path $remoteStatePath -Encoding UTF8
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($remoteConfigPath, (($remoteConfig | ConvertTo-Json) + [Environment]::NewLine), $utf8NoBom)
+[System.IO.File]::WriteAllText($remoteStatePath, (($remoteState | ConvertTo-Json) + [Environment]::NewLine), $utf8NoBom)
 
 $shell = New-Object -ComObject WScript.Shell
 

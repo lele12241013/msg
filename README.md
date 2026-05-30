@@ -7,7 +7,7 @@ Aplicativo local para Windows que sobe um servidor em segundo plano e abre um pa
 1. Instale as dependencias com `npm install`.
 2. Para desenvolvimento, execute `npm start`.
 3. Para gerar o executavel, execute `npm run build`.
-4. Para instalar no notebook e iniciar com o Windows, execute `install-app.cmd`.
+4. Para instalar no notebook e iniciar com o Windows, de um duplo clique em `Instalar Popup Remoto.vbs`.
 5. O instalador copia o executavel para `%LOCALAPPDATA%\PopupRemoto` e cria o atalho de inicializacao automatica na pasta Startup do Windows.
 6. O app ja vem apontado por padrao para `https://raw.githubusercontent.com/lele12241013/msg/main/relay/popup-command.json`, mesmo sem configuracao manual.
 7. Depois de instalado, o painel abre em `http://127.0.0.1:3471`.
@@ -22,7 +22,7 @@ Aplicativo local para Windows que sobe um servidor em segundo plano e abre um pa
 3. Ative o GitHub Pages para a pasta `docs/`.
 4. Acesse a pagina online `docs/index.html` publicada no Pages.
 5. Na pagina online, preencha dono, repositorio, branch, caminho e token GitHub (PAT com permissao de conteudo) e envie a mensagem.
-6. Instale o app no notebook com `install-app.cmd`.
+6. Instale o app no notebook com `Instalar Popup Remoto.vbs`.
 7. O notebook passa a consultar esse JSON periodicamente e mostrar popup de qualquer lugar.
 
 ## Instalacao automatica no Windows
