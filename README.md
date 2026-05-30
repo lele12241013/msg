@@ -31,6 +31,24 @@ Aplicativo local para Windows que sobe um servidor em segundo plano e abre um pa
 - Isso faz o aplicativo iniciar em segundo plano sempre que voce entrar no Windows.
 - Um atalho na area de trabalho tambem e criado para abrir o aplicativo manualmente.
 
+## Link publico fixo (sempre o mesmo)
+
+Para manter sempre a mesma URL publica, use Cloudflare Named Tunnel (nao use Quick Tunnel `trycloudflare.com`, que muda a cada reinicio).
+
+1. Crie um tunnel nomeado no Cloudflare Zero Trust e associe ao seu dominio/subdominio fixo (ex.: `popup.seudominio.com`).
+2. Copie o Tunnel Token gerado no painel da Cloudflare.
+3. Rode a instalacao com os parametros abaixo:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-app.ps1 `
+  -EnablePublicTunnel `
+  -CloudflareTunnelToken "SEU_TUNNEL_TOKEN" `
+  -CloudflarePublicUrl "https://popup.seudominio.com"
+```
+
+4. O instalador cria um atalho na pasta Startup para iniciar o tunnel junto com o Windows.
+5. Resultado: ao ligar o notebook, o app local sobe e o link publico permanece o mesmo.
+
 ## Exemplo de requisicao
 
 ```bash

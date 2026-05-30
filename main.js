@@ -209,6 +209,46 @@ function requestJson(url) {
   });
 }
 
+function sendPopupThroughLocalApi({ message, durationMs, settings }) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ message, durationMs, settings });
+
+    const request = http.request(
+      {
+        hostname: HOST,
+        port: PORT,
+        path: '/api/popup',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+      },
+      (response) => {
+        let responseBody = '';
+
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => {
+          responseBody += chunk;
+        });
+
+        response.on('end', () => {
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            resolve(true);
+            return;
+          }
+
+          reject(new Error(`API local recusou comando remoto: HTTP ${response.statusCode} ${responseBody}`));
+        });
+      }
+    );
+
+    request.on('error', reject);
+    request.write(body);
+    request.end();
+  });
+}
+
 function runGitCommand(args) {
   return execFileSync('git', args, {
     encoding: 'utf8',
@@ -272,7 +312,20 @@ async function pollRemoteCommand() {
       return;
     }
 
-    const shown = showPopup(message, durationMs, normalizePopupSettings(payload.settings || popupSettings));
+    const resolvedSettings = normalizePopupSettings(payload.settings || popupSettings);
+    let shown = false;
+
+    try {
+      await sendPopupThroughLocalApi({
+        message,
+        durationMs,
+        settings: resolvedSettings,
+      });
+      shown = true;
+    } catch (bridgeError) {
+      console.error('Falha na ponte Git -> API local:', bridgeError.message);
+      shown = showPopup(message, durationMs, resolvedSettings);
+    }
 
     if (shown) {
       saveRemoteState({ lastCommandId: commandId });
@@ -480,6 +533,39 @@ function getControlPanelHtml(settings) {
         color: #0e6245;
       }
 
+      .history-block {
+        margin-top: 18px;
+        padding: 14px;
+        border-radius: 16px;
+        background: rgba(18, 44, 52, 0.06);
+      }
+
+      .history-list {
+        margin-top: 10px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .history-empty {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .history-item {
+        width: 100%;
+        text-align: left;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(23, 33, 33, 0.16);
+        background: rgba(255, 255, 255, 0.75);
+        color: var(--ink);
+        cursor: pointer;
+      }
+
+      .history-item:hover {
+        background: rgba(255, 255, 255, 0.95);
+      }
+
       .hint {
         margin-top: 18px;
         padding: 14px 16px;
@@ -581,8 +667,8 @@ function getControlPanelHtml(settings) {
             </div>
 
             <div>
-              <label for="durationMs">Duracao em milissegundos</label>
-              <input id="durationMs" name="durationMs" type="number" min="1500" max="30000" value="5000" />
+              <label for="durationSeconds">Duracao em segundos</label>
+              <input id="durationSeconds" name="durationSeconds" type="number" min="1.5" max="30" step="0.5" value="5" />
             </div>
 
             <p class="eyebrow">Estilo do popup</p>
@@ -645,6 +731,11 @@ function getControlPanelHtml(settings) {
 
           <p class="status" id="status"></p>
 
+          <section class="history-block">
+            <p class="eyebrow">Historico de mensagens</p>
+            <div class="history-list" id="message-history-list"></div>
+          </section>
+
         </section>
 
         <aside class="preview-shell">
@@ -668,6 +759,10 @@ function getControlPanelHtml(settings) {
       const previewMessage = document.getElementById('preview-message');
       const saveButton = document.getElementById('save-settings');
       const resetButton = document.getElementById('reset-settings');
+      const historyList = document.getElementById('message-history-list');
+      const MESSAGE_HISTORY_KEY = 'popupRemoto.local.messageHistory.v1';
+      const MAX_HISTORY_ITEMS = 12;
+      let messageHistory = [];
 
       const fieldIds = [
         'backgroundColor',
@@ -693,6 +788,65 @@ function getControlPanelHtml(settings) {
         if (kind) {
           status.classList.add(kind === 'error' ? 'is-error' : 'is-success');
         }
+      }
+
+      function normalizeMessage(message) {
+        return String(message || '').trim();
+      }
+
+      function saveMessageHistory() {
+        localStorage.setItem(MESSAGE_HISTORY_KEY, JSON.stringify(messageHistory));
+      }
+
+      function renderMessageHistory() {
+        historyList.innerHTML = '';
+
+        if (!messageHistory.length) {
+          const empty = document.createElement('p');
+          empty.className = 'history-empty';
+          empty.textContent = 'Nenhuma mensagem salva ainda.';
+          historyList.appendChild(empty);
+          return;
+        }
+
+        messageHistory.forEach((messageText) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'history-item';
+          button.textContent = messageText;
+          button.dataset.message = messageText;
+          historyList.appendChild(button);
+        });
+      }
+
+      function loadMessageHistory() {
+        try {
+          const raw = localStorage.getItem(MESSAGE_HISTORY_KEY);
+          const parsed = raw ? JSON.parse(raw) : [];
+          if (Array.isArray(parsed)) {
+            messageHistory = parsed
+              .map((entry) => normalizeMessage(entry))
+              .filter((entry) => entry.length > 0)
+              .slice(0, MAX_HISTORY_ITEMS);
+          }
+        } catch {
+          messageHistory = [];
+        }
+
+        renderMessageHistory();
+      }
+
+      function addMessageToHistory(messageText) {
+        const normalized = normalizeMessage(messageText);
+        if (!normalized) {
+          return;
+        }
+
+        messageHistory = [normalized, ...messageHistory.filter((entry) => entry !== normalized)]
+          .slice(0, MAX_HISTORY_ITEMS);
+
+        saveMessageHistory();
+        renderMessageHistory();
       }
 
       function syncPairedFields() {
@@ -780,9 +934,10 @@ function getControlPanelHtml(settings) {
       });
 
       document.getElementById('message').addEventListener('input', applyPreview);
-      document.getElementById('durationMs').addEventListener('input', applyPreview);
+      document.getElementById('durationSeconds').addEventListener('input', applyPreview);
       syncPairedFields();
       writeSettingsToForm(currentSettings);
+      loadMessageHistory();
       applyPreview();
 
       form.addEventListener('submit', async (event) => {
@@ -790,9 +945,10 @@ function getControlPanelHtml(settings) {
         setStatus('Enviando...');
 
         const formData = new FormData(form);
+        const durationSeconds = Number(formData.get('durationSeconds') || 5);
         const payload = {
           message: String(formData.get('message') || ''),
-          durationMs: Number(formData.get('durationMs') || 5000),
+          durationMs: Math.round(durationSeconds * 1000),
           settings: readSettingsFromForm(),
         };
 
@@ -811,10 +967,27 @@ function getControlPanelHtml(settings) {
             throw new Error(result.error || 'Falha ao enviar popup.');
           }
 
+          addMessageToHistory(payload.message);
           setStatus('Popup enviado com sucesso.', 'success');
         } catch (error) {
           setStatus(error.message, 'error');
         }
+      });
+
+      historyList.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLButtonElement)) {
+          return;
+        }
+
+        const selected = normalizeMessage(target.dataset.message);
+        if (!selected) {
+          return;
+        }
+
+        document.getElementById('message').value = selected;
+        applyPreview();
+        setStatus('Mensagem do historico carregada.');
       });
 
       saveButton.addEventListener('click', async () => {

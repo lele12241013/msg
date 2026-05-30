@@ -184,6 +184,39 @@
         color: #0e6245;
       }
 
+      .history-block {
+        margin-top: 18px;
+        padding: 14px;
+        border-radius: 16px;
+        background: rgba(18, 44, 52, 0.06);
+      }
+
+      .history-list {
+        margin-top: 10px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .history-empty {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .history-item {
+        width: 100%;
+        text-align: left;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(23, 33, 33, 0.16);
+        background: rgba(255, 255, 255, 0.75);
+        color: var(--ink);
+        cursor: pointer;
+      }
+
+      .history-item:hover {
+        background: rgba(255, 255, 255, 0.95);
+      }
+
       .hint {
         margin-top: 18px;
         padding: 14px 16px;
@@ -297,8 +330,8 @@
             </div>
 
             <div>
-              <label for="durationMs">Duracao em milissegundos</label>
-              <input id="durationMs" name="durationMs" type="number" min="1500" max="30000" value="5000" />
+              <label for="durationSeconds">Duracao em segundos</label>
+              <input id="durationSeconds" name="durationSeconds" type="number" min="1.5" max="30" step="0.5" value="5" />
             </div>
 
             <p class="eyebrow">Estilo do popup</p>
@@ -360,6 +393,11 @@
           </form>
 
           <p class="status" id="status"></p>
+
+          <section class="history-block">
+            <p class="eyebrow">Historico de mensagens</p>
+            <div class="history-list" id="message-history-list"></div>
+          </section>
         </section>
 
         <aside class="preview-shell">
@@ -385,6 +423,10 @@
       const status = document.getElementById('status');
       const preview = document.getElementById('popup-preview');
       const previewMessage = document.getElementById('preview-message');
+      const historyList = document.getElementById('message-history-list');
+      const MESSAGE_HISTORY_KEY = 'popupRemoto.sender.messageHistory.v1';
+      const MAX_HISTORY_ITEMS = 12;
+      let messageHistory = [];
 
       const settingIds = [
         'backgroundColor',
@@ -413,6 +455,65 @@
 
       function getValue(id) {
         return String(document.getElementById(id).value || '').trim();
+      }
+
+      function normalizeMessage(message) {
+        return String(message || '').trim();
+      }
+
+      function saveMessageHistory() {
+        localStorage.setItem(MESSAGE_HISTORY_KEY, JSON.stringify(messageHistory));
+      }
+
+      function renderMessageHistory() {
+        historyList.innerHTML = '';
+
+        if (!messageHistory.length) {
+          const empty = document.createElement('p');
+          empty.className = 'history-empty';
+          empty.textContent = 'Nenhuma mensagem salva ainda.';
+          historyList.appendChild(empty);
+          return;
+        }
+
+        messageHistory.forEach((messageText) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'history-item';
+          button.textContent = messageText;
+          button.dataset.message = messageText;
+          historyList.appendChild(button);
+        });
+      }
+
+      function loadMessageHistory() {
+        try {
+          const raw = localStorage.getItem(MESSAGE_HISTORY_KEY);
+          const parsed = raw ? JSON.parse(raw) : [];
+          if (Array.isArray(parsed)) {
+            messageHistory = parsed
+              .map((entry) => normalizeMessage(entry))
+              .filter((entry) => entry.length > 0)
+              .slice(0, MAX_HISTORY_ITEMS);
+          }
+        } catch {
+          messageHistory = [];
+        }
+
+        renderMessageHistory();
+      }
+
+      function addMessageToHistory(messageText) {
+        const normalized = normalizeMessage(messageText);
+        if (!normalized) {
+          return;
+        }
+
+        messageHistory = [normalized, ...messageHistory.filter((entry) => entry !== normalized)]
+          .slice(0, MAX_HISTORY_ITEMS);
+
+        saveMessageHistory();
+        renderMessageHistory();
       }
 
       function syncPairedFields() {
@@ -486,7 +587,7 @@
 
       function getSettingsForSave() {
         const saved = {
-          durationMs: getValue('durationMs'),
+          durationSeconds: getValue('durationSeconds'),
           message: getValue('message'),
           popupSettings: readPopupSettings(),
           token: getValue('token'),
@@ -507,8 +608,10 @@
           }
 
           const parsed = JSON.parse(raw);
+          const storedDurationSeconds = parsed.durationSeconds
+            || (parsed.durationMs ? String(Number(parsed.durationMs) / 1000) : '');
           const fields = [
-            ['durationMs', parsed.durationMs],
+            ['durationSeconds', storedDurationSeconds],
             ['message', parsed.message],
             ['token', parsed.token],
           ];
@@ -579,7 +682,23 @@
       });
 
       document.getElementById('message').addEventListener('input', applyPreview);
-      document.getElementById('durationMs').addEventListener('input', applyPreview);
+      document.getElementById('durationSeconds').addEventListener('input', applyPreview);
+
+      historyList.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLButtonElement)) {
+          return;
+        }
+
+        const selected = normalizeMessage(target.dataset.message);
+        if (!selected) {
+          return;
+        }
+
+        document.getElementById('message').value = selected;
+        applyPreview();
+        setStatus('Mensagem do historico carregada.');
+      });
 
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -593,7 +712,8 @@
           const target = DEVICE_KEY;
           let token = getValue('token');
           const message = getValue('message');
-          const durationMs = Number(getValue('durationMs') || '5000');
+          const durationSeconds = Number(getValue('durationSeconds') || '5');
+          const durationMs = Math.round(durationSeconds * 1000);
           const popupSettings = readPopupSettings();
 
           if (!token) {
@@ -612,6 +732,7 @@
           const payload = buildPayload(message, target, durationMs, popupSettings);
           const content = JSON.stringify(payload, null, 2) + '\n';
 
+          addMessageToHistory(message);
           saveSettings();
 
           const current = await getCurrentFile(owner, repo, path, branch, token);
@@ -624,6 +745,7 @@
 
       syncPairedFields();
       loadSettings();
+      loadMessageHistory();
       applyPreview();
     </script>
   </body>
