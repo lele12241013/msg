@@ -1,7 +1,15 @@
 {
-  "id": "init",
+  "id": "manual-test-20260530-1",
   "target": "notebook-1",
-  "message": "",
+  "message": "Teste enviado direto pelo GitHub",
   "durationMs": 5000,
-  "settings": {}
+  "settings": {
+    "backgroundColor": "#fff3dd",
+    "accentColor": "#ff9f1c",
+    "textColor": "#132a32",
+    "width": 430,
+    "height": 190,
+    "fontSize": 18,
+    "opacity": 92
+  }
 }
