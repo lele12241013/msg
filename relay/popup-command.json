@@ -1,15 +1,15 @@
 {
-  "id": "manual-test-20260530-1",
-  "target": "notebook-1",
-  "message": "Teste enviado direto pelo GitHub",
-  "durationMs": 5000,
-  "settings": {
-    "backgroundColor": "#fff3dd",
-    "accentColor": "#ff9f1c",
-    "textColor": "#132a32",
-    "width": 430,
-    "height": 190,
-    "fontSize": 18,
-    "opacity": 92
-  }
+    "target":  "notebook-1",
+    "message":  "Teste via Git com ID novo",
+    "id":  "manual-test-1780169590",
+    "durationMs":  5000,
+    "settings":  {
+                     "opacity":  92,
+                     "width":  430,
+                     "backgroundColor":  "#fff3dd",
+                     "accentColor":  "#ff9f1c",
+                     "textColor":  "#132a32",
+                     "fontSize":  18,
+                     "height":  190
+                 }
 }
