@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Popup Remoto Online</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg-a: #f3efe4;
+        --bg-b: #d8e2dc;
+        --panel: rgba(255, 255, 255, 0.76);
+        --ink: #1f2933;
+        --muted: rgba(31, 41, 51, 0.66);
+        --accent: #0a6c74;
+        --accent-2: #084c61;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--ink);
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background:
+          radial-gradient(circle at top right, rgba(10, 108, 116, 0.18), transparent 32%),
+          radial-gradient(circle at bottom left, rgba(246, 189, 96, 0.2), transparent 30%),
+          linear-gradient(145deg, var(--bg-a), var(--bg-b));
+      }
+
+      main {
+        width: min(900px, calc(100vw - 28px));
+        margin: 32px auto;
+        padding: 26px;
+        border-radius: 24px;
+        background: var(--panel);
+        border: 1px solid rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.16);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(1.8rem, 3.4vw, 3rem);
+      }
+
+      p {
+        margin: 0 0 16px;
+        line-height: 1.6;
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      form {
+        display: grid;
+        gap: 14px;
+        margin-top: 20px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      label {
+        display: grid;
+        gap: 8px;
+        font-weight: 700;
+      }
+
+      input,
+      textarea,
+      button {
+        width: 100%;
+        border: 1px solid rgba(31, 41, 51, 0.2);
+        border-radius: 14px;
+        font: inherit;
+      }
+
+      input,
+      textarea {
+        padding: 12px 14px;
+        background: rgba(255, 255, 255, 0.9);
+      }
+
+      textarea {
+        min-height: 140px;
+        resize: vertical;
+      }
+
+      button {
+        padding: 14px;
+        color: #ffffff;
+        font-weight: 800;
+        cursor: pointer;
+        background: linear-gradient(130deg, var(--accent), var(--accent-2));
+      }
+
+      .status {
+        min-height: 24px;
+        font-weight: 700;
+      }
+
+      .status.error {
+        color: #b91c1c;
+      }
+
+      .status.success {
+        color: #166534;
+      }
+
+      .mono {
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 0.9rem;
+      }
+
+      @media (max-width: 760px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Popup Remoto Online</h1>
+      <p>Esta pagina escreve um comando no arquivo JSON do GitHub. O app instalado no notebook consulta esse arquivo e mostra o popup.</p>
+      <p class="hint">O token do GitHub e usado so no navegador para atualizar o arquivo e nao e salvo nesta pagina.</p>
+
+      <form id="remote-form">
+        <div class="grid">
+          <label>
+            Dono do repositorio
+            <input id="owner" placeholder="seu-usuario" required />
+          </label>
+          <label>
+            Nome do repositorio
+            <input id="repo" placeholder="aplicativo" required />
+          </label>
+          <label>
+            Branch
+            <input id="branch" value="main" required />
+          </label>
+          <label>
+            Caminho do JSON
+            <input id="path" value="relay/popup-command.json" required />
+          </label>
+          <label>
+            Device key
+            <input id="target" value="notebook-1" required />
+          </label>
+          <label>
+            Duracao (ms)
+            <input id="durationMs" type="number" min="1500" max="30000" value="5000" required />
+          </label>
+        </div>
+
+        <label>
+          Token GitHub (PAT com permissoes de conteudo)
+          <input id="token" type="password" placeholder="github_pat_..." required />
+        </label>
+
+        <label>
+          Mensagem
+          <textarea id="message" required>Mensagem enviada do site online.</textarea>
+        </label>
+
+        <button type="submit">Enviar para o notebook</button>
+      </form>
+
+      <p id="status" class="status"></p>
+      <p class="hint mono" id="raw-url"></p>
+    </main>
+
+    <script>
+      const form = document.getElementById('remote-form');
+      const status = document.getElementById('status');
+      const rawUrl = document.getElementById('raw-url');
+
+      function setStatus(message, kind = '') {
+        status.textContent = message;
+        status.className = 'status';
+        if (kind) {
+          status.classList.add(kind);
+        }
+      }
+
+      function getValue(id) {
+        return String(document.getElementById(id).value || '').trim();
+      }
+
+      function buildPayload(message, target, durationMs) {
+        return {
+          id: `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+          target,
+          message,
+          durationMs,
+          settings: {},
+          issuedAt: new Date().toISOString(),
+        };
+      }
+
+      async function getCurrentFile(owner, repo, path, branch, token) {
+        const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(branch)}`;
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+          },
+        });
+
+        if (response.status === 404) {
+          return { sha: undefined };
+        }
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(`Falha ao ler arquivo: ${response.status} ${text}`);
+        }
+
+        const data = await response.json();
+        return { sha: data.sha };
+      }
+
+      async function putFile(owner, repo, path, branch, token, content, sha) {
+        const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+        const response = await fetch(url, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/vnd.github+json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: `relay: popup ${new Date().toISOString()}`,
+            content: btoa(unescape(encodeURIComponent(content))),
+            branch,
+            sha,
+          }),
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(`Falha ao gravar arquivo: ${response.status} ${text}`);
+        }
+
+        return response.json();
+      }
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setStatus('Enviando comando para o GitHub...');
+
+        try {
+          const owner = getValue('owner');
+          const repo = getValue('repo');
+          const branch = getValue('branch');
+          const path = getValue('path');
+          const target = getValue('target');
+          const token = getValue('token');
+          const message = getValue('message');
+          const durationMs = Number(getValue('durationMs') || '5000');
+
+          if (!owner || !repo || !branch || !path || !target || !token || !message) {
+            throw new Error('Preencha todos os campos obrigatorios.');
+          }
+
+          const payload = buildPayload(message, target, durationMs);
+          const content = JSON.stringify(payload, null, 2) + '\n';
+
+          const current = await getCurrentFile(owner, repo, path, branch, token);
+          await putFile(owner, repo, path, branch, token, content, current.sha);
+
+          rawUrl.textContent = `URL raw para configurar no app: https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
+          setStatus('Comando enviado. O notebook deve exibir o popup no proximo ciclo de busca.', 'success');
+        } catch (error) {
+          setStatus(error.message, 'error');
+        }
+      });
+    </script>
+  </body>
+</html>

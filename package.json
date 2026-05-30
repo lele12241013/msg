@@ -1,0 +1,28 @@
+{
+  "name": "aplicativo",
+  "version": "1.0.0",
+  "description": "Servidor local para exibir pop-ups no Windows a partir de um painel web.",
+  "main": "main.js",
+  "bin": "main.js",
+  "scripts": {
+    "start": "node main.js",
+    "build": "pkg . --targets node18-win-x64 --output dist/PopupRemoto.exe",
+    "install:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-app.ps1",
+    "test": "echo \"Sem testes configurados\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  },
+  "pkg": {
+    "scripts": [
+      "main.js"
+    ]
+  }
+}

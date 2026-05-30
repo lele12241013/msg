@@ -1,0 +1,4 @@
+node_modules/
+dist/
+.popup-remoto/
+*.log

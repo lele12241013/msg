@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Controle de Popup</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        --bg: #f7f3ea;
+        --panel: rgba(255, 255, 255, 0.78);
+        --ink: #172121;
+        --accent: #d96c06;
+        --accent-dark: #9c4300;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top right, rgba(217, 108, 6, 0.18), transparent 28%),
+          radial-gradient(circle at bottom left, rgba(18, 44, 52, 0.16), transparent 25%),
+          linear-gradient(135deg, #f8f4ec, #efe7da 55%, #f6efe4);
+      }
+
+      main {
+        width: min(720px, calc(100vw - 32px));
+        margin: 48px auto;
+        padding: 28px;
+        border-radius: 24px;
+        background: var(--panel);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 24px 70px rgba(18, 44, 52, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.7);
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: clamp(2rem, 4vw, 3.2rem);
+        line-height: 1;
+      }
+
+      p {
+        margin: 0 0 18px;
+        font-size: 1rem;
+        line-height: 1.6;
+      }
+
+      form {
+        display: grid;
+        gap: 14px;
+      }
+
+      label {
+        font-weight: 700;
+      }
+
+      textarea,
+      input,
+      button {
+        width: 100%;
+        border-radius: 16px;
+        border: 1px solid rgba(23, 33, 33, 0.14);
+        font: inherit;
+      }
+
+      textarea,
+      input {
+        padding: 14px 16px;
+        background: rgba(255, 255, 255, 0.82);
+      }
+
+      textarea {
+        min-height: 150px;
+        resize: vertical;
+      }
+
+      button {
+        padding: 16px;
+        font-weight: 700;
+        color: white;
+        background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+        cursor: pointer;
+      }
+
+      button:hover {
+        filter: brightness(1.04);
+      }
+
+      .status {
+        min-height: 24px;
+        margin-top: 12px;
+        font-weight: 700;
+      }
+
+      .hint {
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        background: rgba(18, 44, 52, 0.08);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>Painel local</p>
+      <h1>Enviar popup para a tela</h1>
+      <p>Deixe o servidor rodando em segundo plano. Sempre que voce enviar um texto aqui, ele aparece como popup no canto superior direito da tela do Windows.</p>
+
+      <form id="popup-form">
+        <div>
+          <label for="message">Mensagem</label>
+          <textarea id="message" name="message" placeholder="Digite a mensagem que deve aparecer na tela" required></textarea>
+        </div>
+
+        <div>
+          <label for="durationMs">Duracao em milissegundos</label>
+          <input id="durationMs" name="durationMs" type="number" min="1500" max="30000" value="5000" />
+        </div>
+
+        <button type="submit">Mostrar popup</button>
+      </form>
+
+      <p class="status" id="status"></p>
+
+      <div class="hint">
+        Endpoint HTTP: <strong>POST /api/popup</strong><br />
+        Corpo JSON: <strong>{ "message": "Seu texto", "durationMs": 5000 }</strong><br />
+        Inicializacao oculta: <strong>duplo clique em start-background.vbs</strong>
+      </div>
+    </main>
+
+    <script>
+      const form = document.getElementById('popup-form');
+      const status = document.getElementById('status');
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        status.textContent = 'Enviando...';
+
+        const formData = new FormData(form);
+        const payload = {
+          message: String(formData.get('message') || ''),
+          durationMs: Number(formData.get('durationMs') || 5000),
+        };
+
+        try {
+          const response = await fetch('/api/popup', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+          });
+
+          const result = await response.json();
+
+          if (!response.ok) {
+            throw new Error(result.error || 'Falha ao enviar popup.');
+          }
+
+          status.textContent = 'Popup enviado com sucesso.';
+        } catch (error) {
+          status.textContent = error.message;
+        }
+      });
+    </script>
+  </body>
+</html>
