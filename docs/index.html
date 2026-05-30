@@ -591,7 +591,7 @@
           const branch = GITHUB_BRANCH;
           const path = GITHUB_PATH;
           const target = DEVICE_KEY;
-          const token = getValue('token');
+          let token = getValue('token');
           const message = getValue('message');
           const durationMs = Number(getValue('durationMs') || '5000');
           const popupSettings = readPopupSettings();
@@ -601,7 +601,8 @@
             if (!savedToken) {
               throw new Error('Token GitHub necessario para enviar a mensagem.');
             }
-            document.getElementById('token').value = savedToken.trim();
+            token = savedToken.trim();
+            document.getElementById('token').value = token;
           }
 
           if (!message) {
