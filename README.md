@@ -9,10 +9,11 @@ Aplicativo local para Windows que sobe um servidor em segundo plano e abre um pa
 3. Para gerar o executavel, execute `npm run build`.
 4. Para instalar no notebook e iniciar com o Windows, execute `install-app.cmd`.
 5. O instalador copia o executavel para `%LOCALAPPDATA%\PopupRemoto` e cria o atalho de inicializacao automatica na pasta Startup do Windows.
-6. Depois de instalado, o painel abre em `http://127.0.0.1:3471`.
-7. No painel, ajuste cor de fundo, cor da faixa lateral, cor da letra, tamanho, transparencia e tamanho da fonte do popup.
-8. Salve o estilo para reutilizar automaticamente nos proximos popups.
-9. Envie um texto pelo formulario ou com uma requisicao HTTP para `POST /api/popup`.
+6. O instalador tambem grava automaticamente o modo remoto com a URL `https://raw.githubusercontent.com/lele12241013/msg/main/relay/popup-command.json`.
+7. Depois de instalado, o painel abre em `http://127.0.0.1:3471`.
+8. No painel, ajuste cor de fundo, cor da faixa lateral, cor da letra, tamanho, transparencia e tamanho da fonte do popup.
+9. Salve o estilo para reutilizar automaticamente nos proximos popups.
+10. Envie um texto pelo formulario ou com uma requisicao HTTP para `POST /api/popup`.
 
 ## Uso remoto com GitHub
 
@@ -21,11 +22,7 @@ Aplicativo local para Windows que sobe um servidor em segundo plano e abre um pa
 3. Ative o GitHub Pages para a pasta `docs/`.
 4. Acesse a pagina online `docs/index.html` publicada no Pages.
 5. Na pagina online, preencha dono, repositorio, branch, caminho e token GitHub (PAT com permissao de conteudo) e envie a mensagem.
-6. No notebook com o app instalado, abra o painel local e em "Modo remoto GitHub":
-  - ligue "Busca remota";
-  - cole a URL raw exibida na pagina online;
-  - configure o mesmo `device key` usado no site;
-  - salve.
+6. Instale o app no notebook com `install-app.cmd` (o modo remoto ja fica ligado automaticamente).
 7. O notebook passa a consultar esse JSON periodicamente e mostrar popup de qualquer lugar.
 
 ## Instalacao automatica no Windows

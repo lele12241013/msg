@@ -1,6 +1,10 @@
 param(
   [string]$BuildPath = (Join-Path $PSScriptRoot '..\dist\PopupRemoto.exe'),
   [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'PopupRemoto'),
+  [string]$RemoteRawUrl = 'https://raw.githubusercontent.com/lele12241013/msg/main/relay/popup-command.json',
+  [string]$DeviceKey = 'notebook-1',
+  [int]$PollIntervalMs = 15000,
+  [switch]$DisableRemote,
   [switch]$NoLaunch
 )
 
@@ -20,6 +24,26 @@ New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 New-Item -ItemType Directory -Path $startMenuFolder -Force | Out-Null
 
 Copy-Item $resolvedBuild.Path $targetExe -Force
+
+$remoteConfigPath = Join-Path $InstallDir 'remote-config.json'
+$remoteStatePath = Join-Path $InstallDir 'remote-state.json'
+
+$safePollInterval = [Math]::Min([Math]::Max($PollIntervalMs, 5000), 300000)
+$enableRemote = -not $DisableRemote
+
+$remoteConfig = [ordered]@{
+  enabled = $enableRemote
+  rawUrl = $RemoteRawUrl
+  deviceKey = $DeviceKey
+  pollIntervalMs = $safePollInterval
+}
+
+$remoteState = [ordered]@{
+  lastCommandId = ''
+}
+
+$remoteConfig | ConvertTo-Json | Set-Content -Path $remoteConfigPath -Encoding UTF8
+$remoteState | ConvertTo-Json | Set-Content -Path $remoteStatePath -Encoding UTF8
 
 $shell = New-Object -ComObject WScript.Shell
 
@@ -79,6 +103,12 @@ $uninstallShortcut.Save()
 
 Write-Host "Aplicativo instalado em $targetExe"
 Write-Host 'Inicializacao automatica configurada para o proximo login do Windows.'
+if ($enableRemote) {
+  Write-Host "Modo remoto configurado para: $RemoteRawUrl"
+  Write-Host "Device key: $DeviceKey | Intervalo: $safePollInterval ms"
+} else {
+  Write-Host 'Modo remoto desativado na instalacao (DisableRemote).'
+}
 
 if (-not $NoLaunch) {
   Start-Process -FilePath $targetExe
